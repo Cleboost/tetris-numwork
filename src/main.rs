@@ -657,7 +657,7 @@ fn draw_settings_layout() {
     eadk::display::push_rect_uniform(Rect { x: 12, y: 205, width: 296, height: 1 }, color_border);
 }
 
-fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: bool) {
+fn draw_settings_row(row_idx: usize, is_active: bool, mode: usize, speed: i32, auto_level: bool) {
     let modetext = ["Marathon", "Sprint", "Ultra"];
     
     // Premium Color Constants
@@ -668,190 +668,209 @@ fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: b
     let color_light_grey = Color::from_888(180, 180, 180);
     let color_dark_grey = Color::from_888(60, 60, 60);
 
-    // Clear active content areas inside card to make transitions 100% flicker-free
-    eadk::display::push_rect_uniform(Rect { x: 12, y: 46, width: 296, height: 158 }, color_panel_bg);
-    eadk::display::push_rect_uniform(Rect { x: 260, y: 13, width: 45, height: 30 }, Color::from_888(22, 22, 30));
-    eadk::display::push_rect_uniform(Rect { x: 12, y: 206, width: 296, height: 22 }, color_panel_bg);
+    match row_idx {
+        0 => {
+            // Row 0: Mode Selection
+            eadk::display::push_rect_uniform(Rect { x: 12, y: 46, width: 296, height: 49 }, color_panel_bg);
+            
+            let label_color = if is_active { color_accent } else { COLOR_WHITE };
+            eadk::display::draw_string(
+                "MODE DE JEU",
+                Point { x: 25, y: 70 },
+                false,
+                label_color,
+                color_panel_bg,
+            );
+            
+            // Draw Mode Selector Widget Box
+            let selector_rect = Rect { x: 140, y: 65, width: 140, height: 20 };
+            eadk::display::push_rect_uniform(selector_rect, color_border);
+            let selector_inner = Rect { x: 141, y: 66, width: 138, height: 18 };
+            eadk::display::push_rect_uniform(selector_inner, Color::from_888(15, 15, 20));
+            
+            // Center the mode text
+            let mode_str = modetext[mode];
+            let mode_len = mode_str.len();
+            let text_x = 140 + (140 - (mode_len as i32 * 8)) / 2;
+            
+            let arrow_color = if is_active { color_accent } else { color_light_grey };
+            eadk::display::draw_string("<", Point { x: 145, y: 67 }, false, arrow_color, Color::from_888(15, 15, 20));
+            eadk::display::draw_string(">", Point { x: 265, y: 67 }, false, arrow_color, Color::from_888(15, 15, 20));
+            
+            eadk::display::draw_string(
+                mode_str,
+                Point { x: text_x as u16, y: 67 },
+                false,
+                COLOR_WHITE,
+                Color::from_888(15, 15, 20),
+            );
 
-    // Draw the "?" button in the top-right of the header
-    let is_help_active = active_row == 4;
-    let help_btn_border = Rect { x: 275, y: 17, width: 22, height: 22 };
-    let help_btn_bg = Rect { x: 276, y: 18, width: 20, height: 20 };
-    
-    if is_help_active {
-        // Glowing highlighted style when active
-        eadk::display::push_rect_uniform(help_btn_border, color_accent);
-        eadk::display::push_rect_uniform(help_btn_bg, color_accent);
-        eadk::display::draw_string(
-            "?",
-            Point { x: 282, y: 21 },
-            false,
-            COLOR_BLACK,
-            color_accent,
-        );
-    } else {
-        // Standard dormant style when not active
-        eadk::display::push_rect_uniform(help_btn_border, color_border);
-        eadk::display::push_rect_uniform(help_btn_bg, Color::from_888(22, 22, 30));
-        eadk::display::draw_string(
-            "?",
-            Point { x: 282, y: 21 },
-            false,
-            color_light_grey,
-            Color::from_888(22, 22, 30),
-        );
-    }
-
-    // 4. Draw Row 0: Mode Selection
-    let row0_active = active_row == 0;
-    let label0_color = if row0_active { color_accent } else { COLOR_WHITE };
-    
-    eadk::display::draw_string(
-        "MODE DE JEU",
-        Point { x: 25, y: 70 },
-        false,
-        label0_color,
-        color_panel_bg,
-    );
-    
-    // Draw Mode Selector Widget Box
-    let selector_rect = Rect { x: 140, y: 65, width: 140, height: 20 };
-    eadk::display::push_rect_uniform(selector_rect, color_border);
-    let selector_inner = Rect { x: 141, y: 66, width: 138, height: 18 };
-    eadk::display::push_rect_uniform(selector_inner, Color::from_888(15, 15, 20));
-    
-    // Center the mode text
-    let mode_str = modetext[mode];
-    let mode_len = mode_str.len();
-    let text_x = 140 + (140 - (mode_len as i32 * 8)) / 2;
-    
-    let arrow_color = if row0_active { color_accent } else { color_light_grey };
-    eadk::display::draw_string("<", Point { x: 145, y: 67 }, false, arrow_color, Color::from_888(15, 15, 20));
-    eadk::display::draw_string(">", Point { x: 265, y: 67 }, false, arrow_color, Color::from_888(15, 15, 20));
-    
-    eadk::display::draw_string(
-        mode_str,
-        Point { x: text_x as u16, y: 67 },
-        false,
-        COLOR_WHITE,
-        Color::from_888(15, 15, 20),
-    );
-
-    // 5. Draw Row 1: Starting Speed Selection
-    let row1_active = active_row == 1;
-    let label1_color = if row1_active { color_accent } else { COLOR_WHITE };
-    
-    eadk::display::draw_string(
-        "VITESSE INIT",
-        Point { x: 25, y: 110 },
-        false,
-        label1_color,
-        color_panel_bg,
-    );
-    
-    // Draw Speed Segment Slider
-    for i in 0..15 {
-        let tick_x = 140 + i * 6;
-        let tick_rect = Rect { x: tick_x as u16, y: 113, width: 4, height: 12 };
-        
-        let is_active = i < speed;
-        let tick_color = if is_active {
-            if row1_active {
-                if i < 5 {
-                    Color::from_888(0, 230, 100) // Green
-                } else if i < 10 {
-                    Color::from_888(255, 180, 0) // Orange
-                } else {
-                    Color::from_888(255, 50, 50)  // Red
-                }
-            } else {
-                color_accent_muted
+            // Left focus indicator
+            if is_active {
+                eadk::display::push_rect_uniform(Rect { x: 18, y: 68, width: 3, height: 14 }, color_accent);
             }
-        } else {
-            color_dark_grey
-        };
-        
-        eadk::display::push_rect_uniform(tick_rect, tick_color);
-    }
-    
-    // Numeric speed string
-    let speed_str = format!("Lv.{:02}", speed);
-    eadk::display::draw_string(
-        &speed_str,
-        Point { x: 235, y: 110 },
-        false,
-        COLOR_WHITE,
-        color_panel_bg,
-    );
+        }
+        1 => {
+            // Row 1: Starting Speed Selection
+            eadk::display::push_rect_uniform(Rect { x: 12, y: 95, width: 296, height: 40 }, color_panel_bg);
+            
+            let label_color = if is_active { color_accent } else { COLOR_WHITE };
+            eadk::display::draw_string(
+                "VITESSE INIT",
+                Point { x: 25, y: 110 },
+                false,
+                label_color,
+                color_panel_bg,
+            );
+            
+            // Draw Speed Segment Slider
+            for i in 0..15 {
+                let tick_x = 140 + i * 6;
+                let tick_rect = Rect { x: tick_x as u16, y: 113, width: 4, height: 12 };
+                
+                let is_tick_active = i < speed;
+                let tick_color = if is_tick_active {
+                    if is_active {
+                        if i < 5 {
+                            Color::from_888(0, 230, 100) // Green
+                        } else if i < 10 {
+                            Color::from_888(255, 180, 0) // Orange
+                        } else {
+                            Color::from_888(255, 50, 50)  // Red
+                        }
+                    } else {
+                        color_accent_muted
+                    }
+                } else {
+                    color_dark_grey
+                };
+                
+                eadk::display::push_rect_uniform(tick_rect, tick_color);
+            }
+            
+            // Numeric speed string
+            let speed_str = format!("Lv.{:02}", speed);
+            eadk::display::draw_string(
+                &speed_str,
+                Point { x: 235, y: 110 },
+                false,
+                COLOR_WHITE,
+                color_panel_bg,
+            );
 
-    // 6. Draw Row 2: Auto Level Checkbox
-    let row2_active = active_row == 2;
-    let label2_color = if row2_active { color_accent } else { COLOR_WHITE };
-    
-    eadk::display::draw_string(
-        "NIVEAU AUTO",
-        Point { x: 25, y: 147 },
-        false,
-        label2_color,
-        color_panel_bg,
-    );
-    
-    // Checkbox Box
-    let cb_border = Rect { x: 195, y: 145, width: 18, height: 18 };
-    let cb_bg = Rect { x: 196, y: 146, width: 16, height: 16 };
-    let box_border_color = if row2_active { color_accent } else { color_border };
-    
-    eadk::display::push_rect_uniform(cb_border, box_border_color);
-    eadk::display::push_rect_uniform(cb_bg, Color::from_888(15, 15, 20));
-    
-    if auto_level {
-        let cb_check = Rect { x: 199, y: 149, width: 10, height: 10 };
-        let check_color = if row2_active { color_accent } else { color_light_grey };
-        eadk::display::push_rect_uniform(cb_check, check_color);
-    }
+            // Left focus indicator
+            if is_active {
+                eadk::display::push_rect_uniform(Rect { x: 18, y: 109, width: 3, height: 14 }, color_accent);
+            }
+        }
+        2 => {
+            // Row 2: Auto Level Checkbox
+            eadk::display::push_rect_uniform(Rect { x: 12, y: 135, width: 296, height: 35 }, color_panel_bg);
+            
+            let label_color = if is_active { color_accent } else { COLOR_WHITE };
+            eadk::display::draw_string(
+                "NIVEAU AUTO",
+                Point { x: 25, y: 147 },
+                false,
+                label_color,
+                color_panel_bg,
+            );
+            
+            // Checkbox Box
+            let cb_border = Rect { x: 195, y: 145, width: 18, height: 18 };
+            let cb_bg = Rect { x: 196, y: 146, width: 16, height: 16 };
+            let box_border_color = if is_active { color_accent } else { color_border };
+            
+            eadk::display::push_rect_uniform(cb_border, box_border_color);
+            eadk::display::push_rect_uniform(cb_bg, Color::from_888(15, 15, 20));
+            
+            if auto_level {
+                let cb_check = Rect { x: 199, y: 149, width: 10, height: 10 };
+                let check_color = if is_active { color_accent } else { color_light_grey };
+                eadk::display::push_rect_uniform(cb_check, check_color);
+            }
 
-    // Draw Row 3: Save Button
-    let row3_active = active_row == 3;
-    let btn_rect3 = Rect { x: 50, y: 177, width: 220, height: 22 };
-    let btn_border3 = Rect { x: 48, y: 175, width: 224, height: 26 };
-    
-    if row3_active {
-        eadk::display::push_rect_uniform(btn_border3, color_accent);
-        eadk::display::push_rect_uniform(btn_rect3, color_accent);
-        eadk::display::draw_string(
-            "SAUVEGARDER & FERMER",
-            Point { x: 68, y: 180 },
-            false,
-            COLOR_BLACK,
-            color_accent,
-        );
-    } else {
-        eadk::display::push_rect_uniform(btn_border3, color_border);
-        eadk::display::push_rect_uniform(btn_rect3, color_panel_bg);
-        eadk::display::draw_string(
-            "SAUVEGARDER & FERMER",
-            Point { x: 68, y: 180 },
-            false,
-            color_light_grey,
-            color_panel_bg,
-        );
-    }
+            // Left focus indicator
+            if is_active {
+                eadk::display::push_rect_uniform(Rect { x: 18, y: 147, width: 3, height: 14 }, color_accent);
+            }
+        }
+        3 => {
+            // Row 3: Save Button
+            eadk::display::push_rect_uniform(Rect { x: 12, y: 170, width: 296, height: 35 }, color_panel_bg);
+            
+            let btn_rect = Rect { x: 50, y: 177, width: 220, height: 22 };
+            let btn_border = Rect { x: 48, y: 175, width: 224, height: 26 };
+            
+            if is_active {
+                eadk::display::push_rect_uniform(btn_border, color_accent);
+                eadk::display::push_rect_uniform(btn_rect, color_accent);
+                eadk::display::draw_string(
+                    "SAUVEGARDER & FERMER",
+                    Point { x: 68, y: 180 },
+                    false,
+                    COLOR_BLACK,
+                    color_accent,
+                );
+            } else {
+                eadk::display::push_rect_uniform(btn_border, color_border);
+                eadk::display::push_rect_uniform(btn_rect, color_panel_bg);
+                eadk::display::draw_string(
+                    "SAUVEGARDER & FERMER",
+                    Point { x: 68, y: 180 },
+                    false,
+                    color_light_grey,
+                    color_panel_bg,
+                );
+            }
 
-    // 7. Focus indicators on the left margin
-    if active_row == 0 {
-        eadk::display::push_rect_uniform(Rect { x: 18, y: 68, width: 3, height: 14 }, color_accent);
-    } else if active_row == 1 {
-        eadk::display::push_rect_uniform(Rect { x: 18, y: 109, width: 3, height: 14 }, color_accent);
-    } else if active_row == 2 {
-        eadk::display::push_rect_uniform(Rect { x: 18, y: 147, width: 3, height: 14 }, color_accent);
-    } else if active_row == 3 {
-        eadk::display::push_rect_uniform(Rect { x: 18, y: 179, width: 3, height: 14 }, color_accent);
-    } else if active_row == 4 {
-        eadk::display::push_rect_uniform(Rect { x: 268, y: 21, width: 3, height: 14 }, color_accent);
+            // Left focus indicator
+            if is_active {
+                eadk::display::push_rect_uniform(Rect { x: 18, y: 179, width: 3, height: 14 }, color_accent);
+            }
+        }
+        4 => {
+            // Row 4: Header Help Button
+            let header_bg = Color::from_888(22, 22, 30);
+            eadk::display::push_rect_uniform(Rect { x: 260, y: 13, width: 45, height: 30 }, header_bg);
+            
+            let help_btn_border = Rect { x: 275, y: 17, width: 22, height: 22 };
+            let help_btn_bg = Rect { x: 276, y: 18, width: 20, height: 20 };
+            
+            if is_active {
+                eadk::display::push_rect_uniform(help_btn_border, color_accent);
+                eadk::display::push_rect_uniform(help_btn_bg, color_accent);
+                eadk::display::draw_string(
+                    "?",
+                    Point { x: 282, y: 21 },
+                    false,
+                    COLOR_BLACK,
+                    color_accent,
+                );
+                // Glow focus indicator next to it
+                eadk::display::push_rect_uniform(Rect { x: 268, y: 21, width: 3, height: 14 }, color_accent);
+            } else {
+                eadk::display::push_rect_uniform(help_btn_border, color_border);
+                eadk::display::push_rect_uniform(help_btn_bg, header_bg);
+                eadk::display::draw_string(
+                    "?",
+                    Point { x: 282, y: 21 },
+                    false,
+                    color_light_grey,
+                    header_bg,
+                );
+            }
+        }
+        _ => {}
     }
+}
 
-    // 8. Help / Status Bar at the bottom
-    eadk::display::push_rect_uniform(Rect { x: 12, y: 205, width: 296, height: 1 }, color_border);
+fn draw_settings_help(active_row: usize) {
+    let color_panel_bg = Color::from_888(30, 30, 40);
+    let color_light_grey = Color::from_888(180, 180, 180);
+
+    // Clear help bar area
+    eadk::display::push_rect_uniform(Rect { x: 12, y: 206, width: 296, height: 22 }, color_panel_bg);
     
     let fit_help_text = match active_row {
         0 => "G/D: Changer mode  HAUT/BAS: Bouger",
@@ -872,6 +891,14 @@ fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: b
         color_light_grey,
         color_panel_bg,
     );
+}
+
+fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: bool) {
+    for r in 0..4 {
+        draw_settings_row(r, r == active_row, mode, speed, auto_level);
+    }
+    draw_settings_row(4, active_row == 4, mode, speed, auto_level);
+    draw_settings_help(active_row);
 }
 
 fn draw_main_menu_extras() {
@@ -938,6 +965,7 @@ fn show_menu() -> (usize, i32, bool) {
             let mut state_changed = false;
             
             if keys.key_down(Key::Up) {
+                let old_row = active_row;
                 if active_row == 0 {
                     active_row = 4;
                     state_changed = true;
@@ -947,8 +975,15 @@ fn show_menu() -> (usize, i32, bool) {
                     active_row -= 1;
                     state_changed = true;
                 }
+                if state_changed {
+                    draw_settings_row(old_row, false, mode, speed, auto_level);
+                    draw_settings_row(active_row, true, mode, speed, auto_level);
+                    draw_settings_help(active_row);
+                    state_changed = false; // Bypassed full redraw!
+                }
                 eadk::timing::msleep(150);
             } else if keys.key_down(Key::Down) {
+                let old_row = active_row;
                 if active_row == 4 {
                     active_row = 0;
                     state_changed = true;
@@ -956,37 +991,43 @@ fn show_menu() -> (usize, i32, bool) {
                     active_row += 1;
                     state_changed = true;
                 }
+                if state_changed {
+                    draw_settings_row(old_row, false, mode, speed, auto_level);
+                    draw_settings_row(active_row, true, mode, speed, auto_level);
+                    draw_settings_help(active_row);
+                    state_changed = false; // Bypassed full redraw!
+                }
                 eadk::timing::msleep(150);
             }
             
             if active_row == 0 {
                 if keys.key_down(Key::Left) {
                     mode = if mode == 0 { 2 } else { mode - 1 };
-                    state_changed = true;
+                    draw_settings_row(0, true, mode, speed, auto_level);
                     eadk::timing::msleep(150);
                 } else if keys.key_down(Key::Right) {
                     mode = (mode + 1) % 3;
-                    state_changed = true;
+                    draw_settings_row(0, true, mode, speed, auto_level);
                     eadk::timing::msleep(150);
                 }
             } else if active_row == 1 {
                 if keys.key_down(Key::Left) {
                     if speed > 1 {
                         speed -= 1;
-                        state_changed = true;
+                        draw_settings_row(1, true, mode, speed, auto_level);
                     }
                     eadk::timing::msleep(100);
                 } else if keys.key_down(Key::Right) {
                     if speed < 15 {
                         speed += 1;
-                        state_changed = true;
+                        draw_settings_row(1, true, mode, speed, auto_level);
                     }
                     eadk::timing::msleep(100);
                 }
             } else if active_row == 2 {
                 if keys.key_down(Key::Ok) || keys.key_down(Key::Exe) {
                     auto_level = !auto_level;
-                    state_changed = true;
+                    draw_settings_row(2, true, mode, speed, auto_level);
                     while eadk::input::KeyboardState::scan().key_down(Key::Ok) || eadk::input::KeyboardState::scan().key_down(Key::Exe) {
                         eadk::timing::msleep(10);
                     }
