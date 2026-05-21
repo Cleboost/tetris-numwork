@@ -16,6 +16,7 @@ static HEAP: Heap = Heap::empty();
 extern crate alloc;
 
 pub mod eadk;
+pub mod storage_lib;
 
 #[used]
 #[cfg(target_os = "none")]
@@ -906,11 +907,29 @@ fn draw_main_menu_extras() {
     eadk::display::draw_string("[0] Options", Point { x: 105, y: 190 }, false, COLOR_WHITE, COLOR_BLACK);
 }
 
+fn save_settings(mode: usize, speed: i32, auto_level: bool) {
+    let data = [mode as u8, speed as u8, if auto_level { 1 } else { 0 }];
+    storage_lib::storage_file_write("tetris.cfg", &data);
+}
+
+fn load_settings() -> (usize, i32, bool) {
+    let default_settings = (0, 2, true);
+    if let Some(data) = storage_lib::storage_extapp_file_read("tetris.cfg") {
+        if data.len() >= 3 {
+            let mode = data[0] as usize;
+            let speed = data[1] as i32;
+            let auto_level = data[2] != 0;
+            if mode < 3 && speed >= 1 && speed <= 15 {
+                return (mode, speed, auto_level);
+            }
+        }
+    }
+    default_settings
+}
+
 // Menu screen with options
 fn show_menu() -> (usize, i32, bool) {
-    let mut mode = 0;
-    let mut speed = 2;
-    let mut auto_level = true;
+    let (mut mode, mut speed, mut auto_level) = load_settings();
     let mut menu_page = 0;
     let mut active_row = 0;
     
@@ -1029,6 +1048,7 @@ fn show_menu() -> (usize, i32, bool) {
                 }
             } else if active_row == 3 {
                 if keys.key_down(Key::Ok) || keys.key_down(Key::Exe) {
+                    save_settings(mode, speed, auto_level);
                     menu_page = 0;
                     eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
                     draw_logo();
@@ -1040,6 +1060,7 @@ fn show_menu() -> (usize, i32, bool) {
             }
             
             if keys.key_down(Key::Back) || keys.key_down(Key::Zero) {
+                save_settings(mode, speed, auto_level);
                 menu_page = 0;
                 eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
                 draw_logo();
@@ -1047,10 +1068,6 @@ fn show_menu() -> (usize, i32, bool) {
                 while eadk::input::KeyboardState::scan().key_down(Key::Back) || eadk::input::KeyboardState::scan().key_down(Key::Zero) {
                     eadk::timing::msleep(10);
                 }
-            }
-            
-            if state_changed {
-                draw_settings_panel(active_row, mode, speed, auto_level);
             }
         }
         eadk::timing::msleep(16);
