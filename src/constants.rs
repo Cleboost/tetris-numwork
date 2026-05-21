@@ -1,139 +1,164 @@
-use serde::{Deserialize, Serialize};
+use crate::eadk::Color;
 
-use crate::{eadk::Color, mesh::QuadDir};
-
-pub mod rendering {
-    pub const SCREEN_WIDTH: usize = 320;
-    pub const SCREEN_HEIGHT: usize = 240;
-
-    pub const SCREEN_TILE_SUBDIVISION: usize = 2; // Minimum 2
-
-    pub const MIN_FOV: f32 = 30.;
-    pub const MAX_FOV: f32 = 110.;
-
-    pub const FOV: f32 = 45.;
-
-    pub const MAX_TRIANGLES: usize = 1300;
-
-    pub const MAX_RENDER_DISTANCE: usize = 2; // You shouldn't go higher
-
-    pub const BLURING_SCREEN_SUBDIVISION: usize = 5;
-    pub const BLURING_RADIUS: isize = 2;
+#[derive(PartialEq, Clone, Copy)]
+pub enum GameOutcome {
+    Menu,
+    Restart,
 }
 
-pub mod color_palette {
-    use crate::eadk::Color;
-
-    pub const MENU_OUTLINE_COLOR: Color = Color::from_888(150, 150, 150);
-    pub const MENU_ELEMENT_BACKGROUND_COLOR: Color = Color::from_888(230, 230, 230);
-    pub const MENU_ELEMENT_BACKGROUND_COLOR_HOVER: Color = Color::from_888(190, 190, 190);
-    pub const MENU_TEXT_COLOR: Color = Color::from_888(0, 0, 0);
-    pub const MENU_BACKGROUND_COLOR: Color = Color::from_888(255, 255, 255);
-
-    pub const GAMEUI_SLOT_COLOR: Color = Color::from_888(80, 80, 80);
-    pub const GAMEUI_SLOT_DEFAULT_OUTLINE_COLOR: Color = Color::from_888(120, 120, 120);
+// Custom structure for a Tetramino
+pub struct Tetramino {
+    pub states: &'static [&'static [u8]],
+    pub color_index: usize,
 }
 
-pub mod menu {
-    pub const SETTINGS_FILENAME: &str = "settings.ncd"; // NCD = NumCraftData
-}
+pub const COLOR_WHITE: Color = Color::from_888(255, 255, 255);
+pub const COLOR_BLACK: Color = Color::from_888(0, 0, 0);
+pub const COLOR_GREY: Color = Color::from_888(120, 120, 120);
 
-pub mod world {
-    pub const CHUNK_SIZE: usize = 8; // MAX 8
-}
+// Colors for the Tetraminos
+pub const COLORS: [Color; 7] = [
+    Color::from_888(0, 255, 255),   // Cyan (I)
+    Color::from_888(255, 255, 0),   // Yellow (O)
+    Color::from_888(200, 0, 255),   // Magenta/Purple (T)
+    Color::from_888(255, 150, 0),   // Orange (L)
+    Color::from_888(0, 0, 255),     // Blue (J)
+    Color::from_888(255, 0, 0),     // Z piece
+    Color::from_888(0, 255, 0),     // S piece
+];
 
-pub mod player {
-    use core::f32::consts::PI;
+// Definition of the 7 classic Tetraminos and their rotation states
+pub static TETRAMINOS: [Tetramino; 7] = [
+    // I piece (t = 0)
+    Tetramino {
+        states: &[
+            &[2, 3, 3, 3, 3],
+            &[0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 3],
+            &[2, 2, 3, 3, 3, 3],
+            &[0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 3],
+        ],
+        color_index: 0,
+    },
+    // O piece (t = 1)
+    Tetramino {
+        states: &[
+            &[0, 1, 1, 2, 0, 3, 3],
+        ],
+        color_index: 1,
+    },
+    // T piece (t = 2)
+    Tetramino {
+        states: &[
+            &[0, 1, 2, 3, 3, 3],
+            &[0, 1, 2, 0, 1, 3, 2, 0, 3],
+            &[2, 3, 1, 3, 2, 0, 3],
+            &[0, 1, 2, 3, 1, 2, 0, 3],
+        ],
+        color_index: 2,
+    },
+    // J piece (t = 3)
+    Tetramino {
+        states: &[
+            &[0, 0, 1, 2, 3, 3, 3],
+            &[0, 1, 2, 0, 1, 2, 0, 3, 3],
+            &[2, 1, 3, 3, 2, 3],
+            &[3, 1, 2, 0, 1, 2, 0, 3],
+        ],
+        color_index: 3,
+    },
+    // L piece (t = 4)
+    Tetramino {
+        states: &[
+            &[1, 2, 3, 3, 3],
+            &[0, 1, 3, 2, 0, 1, 2, 0, 3],
+            &[2, 3, 3, 1, 2, 0, 0, 3],
+            &[0, 1, 2, 0, 1, 2, 3, 3],
+        ],
+        color_index: 4,
+    },
+    // Z piece (t = 5)
+    Tetramino {
+        states: &[
+            &[3, 1, 2, 0, 3, 3],
+            &[0, 0, 1, 2, 0, 1, 3, 2, 0, 3],
+            &[2, 3, 1, 2, 0, 3, 3],
+            &[0, 1, 2, 1, 3, 2, 3],
+        ],
+        color_index: 5,
+    },
+    // S piece (t = 6)
+    Tetramino {
+        states: &[
+            &[0, 1, 3, 2, 3, 3],
+            &[0, 1, 2, 0, 3, 1, 2, 0, 0, 3],
+            &[2, 0, 1, 3, 2, 3, 3],
+            &[1, 2, 3, 1, 2, 0, 3],
+        ],
+        color_index: 6,
+    },
+];
 
-    pub const ROTATION_SPEED: f32 = PI / 3.0; // rad / sec
-    pub const MOVEMENT_SPEED: f32 = 4.0;
-}
+// SRS wall kick offsets
+pub const KICKDATA: [[(i32, i32); 4]; 8] = [
+    [(-1, 0), (-1, -1), (0, 2), (-1, 2)],
+    [(1, 0), (1, 1), (0, -2), (1, -2)],
+    [(1, 0), (1, -1), (0, 2), (1, 2)],
+    [(-1, 0), (-1, 1), (0, -2), (-1, -2)],
+    [(-2, 0), (1, 0), (-2, 1), (1, -2)],
+    [(2, 0), (-1, 0), (2, -1), (-1, 2)],
+    [(-1, 0), (2, 0), (-1, -2), (2, 1)],
+    [(1, 0), (-2, 0), (1, 2), (-2, -1)],
+];
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum BlockType {
-    Air = 0,
-    Stone = 1,
-    Grass = 2,
-    Dirt = 3,
-}
+pub const IKICKS: [[usize; 4]; 4] = [
+    [0, 5, 0, 7],
+    [4, 0, 7, 0],
+    [0, 6, 0, 4],
+    [6, 0, 5, 0],
+];
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum ItemType {
-    Air = 0,
+// Score and levels constants
+pub const SCORESYS: [[i32; 5]; 5] = [
+    [0, 100, 300, 500, 800],
+    [100, 400, 1200, 1600, 0],
+    [0, 1200, 1800, 2400, 1200],
+    [100, 200, 400, 1200, 0],
+    [0, 0, 600, 2400, 0],
+];
 
-    StoneBlock = 1,
-    GrassBlock = 2,
-    DirtBlock = 3,
-}
+pub const SCORETITLES: [[&str; 5]; 5] = [
+    ["         ", "Single", "Double", "Triple", "Tetris"],
+    ["M T-S", "T-S S", "T-S D", "T-S T", ""],
+    ["", "T-S B", "T-S D B", "T-S T B", "Tetris B"],
+    ["M T-S", "M T-S S", "M T-S D", "T-S T", ""],
+    ["", "", "T-S M D B", "T-S T B", ""],
+];
 
-impl ItemType {
-    pub fn get_texture_id(&self) -> u8 {
-        match *self {
-            ItemType::StoneBlock => 1,
-            ItemType::GrassBlock => 2,
-            ItemType::DirtBlock => 3,
-            _ => 0,
-        }
-    }
+pub const BSYS: [[i32; 5]; 5] = [
+    [0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1],
+    [0, 0, 1, 1, 0],
+    [0, 0, 1, 1, 0],
+];
 
-    pub fn get_max_stack_amount(&self) -> u8 {
-        match *self {
-            ItemType::Air => 0,
-            ItemType::StoneBlock => 64,
-            ItemType::GrassBlock => 64,
-            ItemType::DirtBlock => 64,
-        }
-    }
+pub const LEVELSYS: [i32; 5] = [0, 1, 3, 5, 8];
 
-    pub fn get_matching_block_type(&self) -> Option<BlockType> {
-        match self {
-            ItemType::Air => None,
-            ItemType::StoneBlock => Some(BlockType::Stone),
-            ItemType::GrassBlock => Some(BlockType::Grass),
-            ItemType::DirtBlock => Some(BlockType::Dirt),
-        }
-    }
-}
+// Main Logo and background drawing
+pub const LOGO: [[u8; 21]; 5] = [
+    [1, 1, 1, 0, 2, 2, 2, 0, 3, 3, 3, 0, 4, 4, 4, 0, 5, 0, 0, 6, 6],
+    [0, 1, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 4, 0, 4, 0, 0, 0, 6, 0, 0],
+    [0, 1, 0, 0, 2, 2, 0, 0, 0, 3, 0, 0, 4, 4, 0, 0, 5, 0, 0, 6, 0],
+    [0, 1, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 4, 0, 4, 0, 5, 0, 0, 0, 6],
+    [0, 1, 0, 0, 2, 2, 2, 0, 0, 3, 0, 0, 4, 0, 4, 0, 5, 0, 6, 6, 0],
+];
 
-impl BlockType {
-    pub fn is_air(&self) -> bool {
-        *self == BlockType::Air
-    }
-
-    pub fn get_texture_id(&self, dir: QuadDir) -> u8 {
-        match *self {
-            BlockType::Air => 0,
-            BlockType::Stone => 1,
-            BlockType::Grass => {
-                if dir == QuadDir::Top {
-                    2
-                } else {
-                    3
-                }
-            }
-            BlockType::Dirt => 3,
-        }
-    }
-
-    pub const fn get_from_id(id: u8) -> Option<Self> {
-        match id {
-            0 => Some(BlockType::Air),
-            1 => Some(BlockType::Stone),
-            2 => Some(BlockType::Grass),
-            3 => Some(BlockType::Dirt),
-            _ => None,
-        }
-    }
-}
-
-pub fn get_quad_color_from_texture_id(id: u8) -> Color {
-    match id {
-        0 => Color::from_888(0, 0, 0),
-        1 => Color::from_888(160, 160, 160),
-        2 => Color::from_888(21, 147, 0),
-        3 => Color::from_888(120, 77, 49),
-        _ => Color::from_888(0, 0, 0),
-        // 255 is reserved for block outline
-    }
-}
+pub const LOGO_COLORS: [Color; 7] = [
+    Color::from_888(0, 0, 100),
+    Color::from_888(255, 0, 0),
+    Color::from_888(255, 150, 0),
+    Color::from_888(255, 255, 0),
+    Color::from_888(0, 255, 0),
+    Color::from_888(0, 255, 255),
+    Color::from_888(255, 0, 255),
+];
