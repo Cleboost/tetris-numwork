@@ -12,6 +12,136 @@ use crate::constants::{
 use crate::drawing::{draw_bevel_square, gpix};
 use crate::piece::PieceQueue;
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SavedGameState {
+    pub magic: [u8; 4],
+    pub mode: u32,
+    pub speed: i32,
+    pub auto_level: u8,
+    pub x: i32,
+    pub y: i32,
+    pub rot: u32,
+    pub t: u32,
+    pub hold: i32,
+    pub hold_allowed: u8,
+    pub score: i32,
+    pub combo: i32,
+    pub level: i32,
+    pub xp: i32,
+    pub btob: i32,
+    pub lines: i32,
+    pub elapsed_ms: u64,
+    pub queue: [u32; 14],
+    pub consumed: u32,
+    pub grid: [u16; 276],
+}
+
+impl SavedGameState {
+    pub fn as_bytes(&self) -> &[u8] {
+        let ptr = self as *const Self as *const u8;
+        let len = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(ptr, len) }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != core::mem::size_of::<Self>() {
+            return None;
+        }
+        let mut state = core::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                state.as_mut_ptr() as *mut u8,
+                core::mem::size_of::<Self>(),
+            );
+            let state = state.assume_init();
+            if state.magic == *b"TETR" {
+                Some(state)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+pub const SAVE_FILENAME: &str = "tetris_save.dat";
+
+pub fn save_game_state_to_file(state: &SavedGameState) -> bool {
+    crate::storage_lib::storage_file_write(SAVE_FILENAME, state.as_bytes())
+}
+
+pub fn load_game_state_from_file() -> Option<SavedGameState> {
+    if let Some(data) = crate::storage_lib::storage_extapp_file_read(SAVE_FILENAME) {
+        SavedGameState::from_bytes(&data)
+    } else {
+        None
+    }
+}
+
+pub fn delete_game_save_file() {
+    // Always try to erase, don't rely on exists() check
+    crate::storage_lib::storage_extapp_file_erase(SAVE_FILENAME);
+}
+
+pub fn auto_save_checkpoint(
+    mode: usize,
+    speed: i32,
+    auto_level: bool,
+    x: i32,
+    y: i32,
+    rot: u32,
+    t: u32,
+    hold: i32,
+    hold_allowed: bool,
+    score: i32,
+    combo: i32,
+    level: i32,
+    xp: i32,
+    btob: i32,
+    lines: i32,
+    elapsed_ms: u64,
+    piece_queue: &PieceQueue,
+    grid: &[[Color; 23]; 12],
+) {
+    let mut saved_grid = [0u16; 276];
+    for col in 0..12 {
+        for row in 0..23 {
+            saved_grid[col * 23 + row] = grid[col][row].rgb565;
+        }
+    }
+
+    let mut q = [0u32; 14];
+    for i in 0..14 {
+        q[i] = piece_queue.queue[i] as u32;
+    }
+
+    let state = SavedGameState {
+        magic: *b"TETR",
+        mode: mode as u32,
+        speed,
+        auto_level: if auto_level { 1 } else { 0 },
+        x,
+        y,
+        rot,
+        t,
+        hold,
+        hold_allowed: if hold_allowed { 1 } else { 0 },
+        score,
+        combo,
+        level,
+        xp,
+        btob,
+        lines,
+        elapsed_ms,
+        queue: q,
+        consumed: piece_queue.consumed as u32,
+        grid: saved_grid,
+    };
+
+    save_game_state_to_file(&state);
+}
+
 // Grid initializer
 pub fn init_grid(grid: &mut [[Color; 23]; 12]) {
     for col in 0..12 {
@@ -28,7 +158,7 @@ pub fn init_grid(grid: &mut [[Color; 23]; 12]) {
     }
 }
 
-pub fn draw_grid_on_screen(_grid: &[[Color; 23]; 12]) {
+pub fn draw_grid_on_screen(grid: &[[Color; 23]; 12]) {
     eadk::display::push_rect_uniform(Rect { x: 110, y: 0, width: 100, height: 220 }, COLOR_WHITE);
     for row in 0..23 {
         let y = (row * 10) as i32;
@@ -38,6 +168,18 @@ pub fn draw_grid_on_screen(_grid: &[[Color; 23]; 12]) {
     for col in 1..11 {
         let x = (100 + col * 10) as i32;
         draw_bevel_square(x, 220, COLOR_GREY);
+    }
+    
+    // Render restored blocks
+    for col in 1..11 {
+        for row in 0..22 {
+            let color = grid[col][row];
+            if color.rgb565 != COLOR_WHITE.rgb565 {
+                let x = 100 + col as i32 * 10;
+                let y = row as i32 * 10;
+                draw_bevel_square(x, y, color);
+            }
+        }
     }
 }
 
@@ -190,7 +332,7 @@ pub fn draw_outline_on_screen(xt: i32, yt: i32, t: usize, r: usize) {
 }
 
 // Main Game loop logic
-pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
+pub fn run_game(mode: usize, speed: i32, auto_level: bool, resume_state: Option<SavedGameState>) -> GameOutcome {
     let mut x = 140;
     let mut y = 20;
     let mut px;
@@ -202,7 +344,6 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     let mut plowest = 500;
     
     let mut piece_queue = PieceQueue::new();
-    t = piece_queue.pop();
     
     let mut hold = -1;
     let mut hold_allowed = true;
@@ -214,15 +355,47 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     let mut lines = 0;
     let mut end = false;
     
-    let start_time = eadk::timing::millis();
+    let start_time;
     let mut last_drop_time = eadk::timing::millis();
     let mut coolh_time = eadk::timing::millis();
     let mut arr = true;
     let mut coolr = 0;
     let mut last_move = -1;
+    let mut last_save_ms: u64 = 0;
     
     let mut grid = [[COLOR_WHITE; 23]; 12];
     init_grid(&mut grid);
+
+    if let Some(state) = resume_state {
+        x = state.x;
+        y = state.y;
+        rot = state.rot as usize;
+        t = state.t as usize;
+        hold = state.hold;
+        hold_allowed = state.hold_allowed != 0;
+        score = state.score;
+        combo = state.combo;
+        level = state.level;
+        xp = state.xp;
+        btob = state.btob;
+        lines = state.lines;
+        
+        for i in 0..14 {
+            piece_queue.queue[i] = state.queue[i] as usize;
+        }
+        piece_queue.consumed = state.consumed as usize;
+        
+        for col in 0..12 {
+            for row in 0..23 {
+                grid[col][row] = Color { rgb565: state.grid[col * 23 + row] };
+            }
+        }
+        
+        start_time = eadk::timing::millis().saturating_sub(state.elapsed_ms);
+    } else {
+        t = piece_queue.pop();
+        start_time = eadk::timing::millis();
+    }
 
     // Clear the entire screen to black to wipe out menu elements and the logo
     eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
@@ -247,6 +420,10 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     
     piece_queue.draw_preview();
     
+    if hold != -1 {
+        draw_tetra_on_screen(30, 60, hold as usize, 0);
+    }
+    
     eadk::display::draw_string(
         if mode != 1 { "Score :" } else { "Lines :" },
         Point { x: 15, y: 110 },
@@ -254,13 +431,13 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
         COLOR_WHITE,
         COLOR_BLACK,
     );
-    eadk::display::draw_string(
-        if mode != 1 { "0000000" } else { "00/40" },
-        Point { x: 15, y: 130 },
-        false,
-        COLOR_WHITE,
-        COLOR_BLACK,
-    );
+    if mode != 1 {
+        let score_str = format!("{:07}", score);
+        eadk::display::draw_string(&score_str, Point { x: 15, y: 130 }, false, COLOR_WHITE, COLOR_BLACK);
+    } else {
+        let lines_str = format!("{:02}/40", lines);
+        eadk::display::draw_string(&lines_str, Point { x: 15, y: 130 }, false, COLOR_WHITE, COLOR_BLACK);
+    }
     eadk::display::draw_string(
         if mode == 0 { "Level :" } else { "Time :" },
         Point { x: 15, y: 160 },
@@ -273,6 +450,18 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
         eadk::display::draw_string(&level_str, Point { x: 65, y: 180 }, false, COLOR_WHITE, COLOR_BLACK);
     } else {
         eadk::display::draw_string("00:00.00", Point { x: 15, y: 180 }, false, COLOR_WHITE, COLOR_BLACK);
+        if resume_state.is_some() {
+            let timem = (resume_state.unwrap().elapsed_ms / 60000) as i32;
+            let times_val = ((resume_state.unwrap().elapsed_ms % 60000) / 1000) as i32;
+            let times = format!("{:02}", times_val);
+            let timems_val = ((resume_state.unwrap().elapsed_ms % 1000) / 10) as i32;
+            let timems = format!("{:02}", timems_val);
+            
+            eadk::display::draw_string(&timems, Point { x: 75, y: 180 }, false, COLOR_WHITE, COLOR_BLACK);
+            let timem_str = format!("{}", timem);
+            eadk::display::draw_string(&timem_str, Point { x: (25 - timem_str.len() as i32 * 10) as u16, y: 180 }, false, COLOR_WHITE, COLOR_BLACK);
+            eadk::display::draw_string(&times, Point { x: (65 - times.len() as i32 * 10) as u16, y: 180 }, false, COLOR_WHITE, COLOR_BLACK);
+        }
     }
     
     // Countdown
@@ -349,8 +538,20 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
             eadk::display::draw_string("      ", Point { x: 240, y: 5 }, false, COLOR_WHITE, COLOR_BLACK);
             
             if choice == GameOutcome::Menu {
+                // Always save when the user explicitly exits to menu
+                let save_elapsed = eadk::timing::millis() - start_time;
+                auto_save_checkpoint(
+                    mode, speed, auto_level,
+                    x, y, rot as u32, t as u32,
+                    hold, hold_allowed,
+                    score, combo, level, xp, btob, lines,
+                    save_elapsed,
+                    &piece_queue,
+                    &grid,
+                );
                 return GameOutcome::Menu;
             } else if choice == GameOutcome::Restart && eadk::input::KeyboardState::scan().key_down(Key::Seven) {
+                delete_game_save_file();
                 return GameOutcome::Restart;
             }
             
@@ -468,6 +669,8 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
         
         // Check Victory conditions
         if (mode == 1 && lines >= 40) || (mode == 2 && timem >= 3) {
+            // Delete save — game is finished
+            delete_game_save_file();
             while eadk::input::KeyboardState::scan().key_down(Key::Ok) {
                 eadk::timing::msleep(10);
             }
@@ -788,11 +991,33 @@ pub fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
             draw_outline_on_screen(x, plowest, t, rot);
         }
         
+        // Periodic auto-save every 3 seconds (smart throttle)
+        if !end {
+            let now_for_save = eadk::timing::millis();
+            if now_for_save - last_save_ms >= 3000 {
+                let save_elapsed = now_for_save - start_time;
+                auto_save_checkpoint(
+                    mode, speed, auto_level,
+                    x, y, rot as u32, t as u32,
+                    hold, hold_allowed,
+                    score, combo, level, xp, btob, lines,
+                    save_elapsed,
+                    &piece_queue,
+                    &grid,
+                );
+                last_save_ms = now_for_save;
+            }
+        }
+
         draw_tetra_on_screen(x, y, t, rot);
         eadk::timing::msleep(16);
     }
     
-    // Game Over
+    // Game Over — delete save so "Continue" no longer appears
+    // Double-call for robustness
+    delete_game_save_file();
+    delete_game_save_file();
+
     eadk::display::draw_string("GAME OVER", Point { x: 115, y: 60 }, false, COLOR_BLACK, COLOR_WHITE);
     eadk::display::draw_string("[OK] Back to menu", Point { x: 75, y: 80 }, false, COLOR_BLACK, COLOR_WHITE);
     loop {

@@ -40,8 +40,8 @@ pub static EADK_APP_API_LEVEL: u32 = 0;
 pub static EADK_APP_ICON: [u8; 1520] = *include_bytes!("../target/icon.nwi");
 
 use crate::rng::seed_rng;
-use crate::settings::show_menu;
-use crate::game::run_game;
+use crate::settings::{show_menu, MenuOutcome};
+use crate::game::{run_game, load_game_state_from_file};
 use crate::constants::GameOutcome;
 
 #[unsafe(no_mangle)]
@@ -59,11 +59,31 @@ fn main() -> isize {
     }
 
     loop {
-        let (mode, speed, auto_level) = show_menu();
-        loop {
-            let outcome = run_game(mode, speed, auto_level);
-            if outcome == GameOutcome::Menu {
-                break;
+        match show_menu() {
+            MenuOutcome::ResumeGame => {
+                if let Some(state) = load_game_state_from_file() {
+                    let mode = state.mode as usize;
+                    let speed = state.speed;
+                    let auto_level = state.auto_level != 0;
+                    // First call resumes from save; Restart will start fresh
+                    let mut resume = Some(state);
+                    loop {
+                        let outcome = run_game(mode, speed, auto_level, resume.take());
+                        if outcome == GameOutcome::Menu {
+                            break;
+                        }
+                        // Restart: keep going without save state
+                    }
+                }
+                // If load fails, fall back to main menu
+            }
+            MenuOutcome::NewGame { mode, speed, auto_level } => {
+                loop {
+                    let outcome = run_game(mode, speed, auto_level, None);
+                    if outcome == GameOutcome::Menu {
+                        break;
+                    }
+                }
             }
         }
     }

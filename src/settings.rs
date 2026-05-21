@@ -8,6 +8,7 @@ use crate::eadk::input::Key;
 use crate::constants::{COLOR_WHITE, COLOR_BLACK};
 use crate::drawing::draw_logo;
 use crate::storage_lib;
+use crate::game::SAVE_FILENAME;
 
 pub fn draw_help_screen() {
     let color_bg_dark = Color::from_888(15, 15, 20);
@@ -423,6 +424,11 @@ pub fn draw_main_menu_extras() {
     eadk::display::draw_string("[0] Options", Point { x: 105, y: 190 }, false, COLOR_WHITE, COLOR_BLACK);
 }
 
+pub enum MenuOutcome {
+    ResumeGame,
+    NewGame { mode: usize, speed: i32, auto_level: bool },
+}
+
 pub fn save_settings(mode: usize, speed: i32, auto_level: bool) {
     let data = [mode as u8, speed as u8, if auto_level { 1 } else { 0 }];
     storage_lib::storage_file_write("tetris.cfg", &data);
@@ -443,57 +449,147 @@ pub fn load_settings() -> (usize, i32, bool) {
     default_settings
 }
 
+// Renders the main menu items based on whether a save exists
+fn draw_main_menu_buttons(has_save: bool, selected: usize) {
+    let color_bg        = COLOR_BLACK;
+    let color_accent    = Color::from_888(0, 180, 255);
+    let color_selected_bg = color_accent;
+    let color_normal_fg = COLOR_WHITE;
+    let color_selected_fg = COLOR_BLACK;
+
+    let items: &[&str] = if has_save {
+        &["CONTINUER", "NOUVELLE PARTIE", "OPTIONS"]
+    } else {
+        &["NOUVELLE PARTIE", "OPTIONS"]
+    };
+
+    // Clear the button area (below logo)
+    eadk::display::push_rect_uniform(Rect { x: 60, y: 150, width: 200, height: 80 }, color_bg);
+
+    let start_y = 155u16;
+    let step: u16 = 23;
+    for (i, &label) in items.iter().enumerate() {
+        let y = start_y + i as u16 * step;
+        let label_len = label.len() as u16;
+        let lx = 160 - label_len * 4; // roughly center at x=160
+        if i == selected {
+            // Highlight pill
+            eadk::display::push_rect_uniform(Rect { x: lx - 4, y: y - 2, width: label_len * 8 + 8, height: 14 }, color_selected_bg);
+            eadk::display::draw_string(label, Point { x: lx, y }, false, color_selected_fg, color_selected_bg);
+        } else {
+            eadk::display::draw_string(label, Point { x: lx, y }, false, color_normal_fg, color_bg);
+        }
+    }
+}
+
 // Menu screen with options
-pub fn show_menu() -> (usize, i32, bool) {
+pub fn show_menu() -> MenuOutcome {
     let (mut mode, mut speed, mut auto_level) = load_settings();
-    let mut menu_page = 0;
-    let mut active_row = 0;
-    
+    let mut menu_page = 0u8; // 0 = main, 1 = settings
+    let mut active_row = 0usize;
+    let mut main_selected = 0usize;
+
     draw_logo();
-    draw_main_menu_extras();
-    
+    let mut has_save = storage_lib::storage_extapp_file_exists(SAVE_FILENAME);
+    draw_main_menu_buttons(has_save, main_selected);
+
     loop {
         let keys = eadk::input::KeyboardState::scan();
-        
+
         if menu_page == 0 {
+            // ---- navigate Up / Down ----
+            let num_items: usize = if has_save { 3 } else { 2 };
+
+            if keys.key_down(Key::Up) {
+                if main_selected > 0 {
+                    main_selected -= 1;
+                    draw_main_menu_buttons(has_save, main_selected);
+                }
+                eadk::timing::msleep(150);
+                continue;
+            }
+            if keys.key_down(Key::Down) {
+                if main_selected + 1 < num_items {
+                    main_selected += 1;
+                    draw_main_menu_buttons(has_save, main_selected);
+                }
+                eadk::timing::msleep(150);
+                continue;
+            }
+
+            // ---- confirm (EXE or OK) ----
+            if keys.key_down(Key::Exe) || keys.key_down(Key::Ok) {
+                while eadk::input::KeyboardState::scan().key_down(Key::Exe)
+                    || eadk::input::KeyboardState::scan().key_down(Key::Ok)
+                {
+                    eadk::timing::msleep(10);
+                }
+
+                if has_save {
+                    match main_selected {
+                        0 => return MenuOutcome::ResumeGame,
+                        1 => {
+                            // Delete save and start new game
+                            crate::game::delete_game_save_file();
+                            return MenuOutcome::NewGame { mode, speed, auto_level };
+                        }
+                        _ => {
+                            // Open options
+                            menu_page = 1;
+                            active_row = 0;
+                            draw_settings_layout();
+                            draw_settings_panel(active_row, mode, speed, auto_level);
+                        }
+                    }
+                } else {
+                    match main_selected {
+                        0 => return MenuOutcome::NewGame { mode, speed, auto_level },
+                        _ => {
+                            // Open options
+                            menu_page = 1;
+                            active_row = 0;
+                            draw_settings_layout();
+                            draw_settings_panel(active_row, mode, speed, auto_level);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Toolbox key still shows help from main menu
             if keys.key_down(Key::Toolbox) {
                 draw_help_screen();
-                // After returning from help, clean and redraw main menu
                 eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
                 draw_logo();
-                draw_main_menu_extras();
+                has_save = storage_lib::storage_extapp_file_exists(SAVE_FILENAME);
+                draw_main_menu_buttons(has_save, main_selected);
                 while eadk::input::KeyboardState::scan().key_down(Key::Toolbox) {
                     eadk::timing::msleep(10);
                 }
             }
+
+            // Legacy [0] shortcut to options
             if keys.key_down(Key::Zero) {
                 menu_page = 1;
                 active_row = 0;
-                
                 draw_settings_layout();
-                // Initial draw of the settings panel
                 draw_settings_panel(active_row, mode, speed, auto_level);
-                
                 while eadk::input::KeyboardState::scan().key_down(Key::Zero) {
                     eadk::timing::msleep(10);
                 }
             }
-            if keys.key_down(Key::Exe) {
-                while eadk::input::KeyboardState::scan().key_down(Key::Exe) {
-                    eadk::timing::msleep(10);
-                }
-                break;
-            }
+
         } else if menu_page == 1 {
+            // ---- settings page (unchanged logic) ----
             let mut state_changed = false;
-            
+
             if keys.key_down(Key::Up) {
                 let old_row = active_row;
                 if active_row == 0 {
                     active_row = 4;
                     state_changed = true;
                 } else if active_row == 4 {
-                    // Do nothing or wrap around
+                    // Do nothing
                 } else {
                     active_row -= 1;
                     state_changed = true;
@@ -502,7 +598,6 @@ pub fn show_menu() -> (usize, i32, bool) {
                     draw_settings_row(old_row, false, mode, speed, auto_level);
                     draw_settings_row(active_row, true, mode, speed, auto_level);
                     draw_settings_help(active_row);
-                    state_changed = false; // Bypassed full redraw!
                 }
                 eadk::timing::msleep(150);
             } else if keys.key_down(Key::Down) {
@@ -518,11 +613,10 @@ pub fn show_menu() -> (usize, i32, bool) {
                     draw_settings_row(old_row, false, mode, speed, auto_level);
                     draw_settings_row(active_row, true, mode, speed, auto_level);
                     draw_settings_help(active_row);
-                    state_changed = false; // Bypassed full redraw!
                 }
                 eadk::timing::msleep(150);
             }
-            
+
             if active_row == 0 {
                 if keys.key_down(Key::Left) {
                     mode = if mode == 0 { 2 } else { mode - 1 };
@@ -551,14 +645,15 @@ pub fn show_menu() -> (usize, i32, bool) {
                 if keys.key_down(Key::Ok) || keys.key_down(Key::Exe) {
                     auto_level = !auto_level;
                     draw_settings_row(2, true, mode, speed, auto_level);
-                    while eadk::input::KeyboardState::scan().key_down(Key::Ok) || eadk::input::KeyboardState::scan().key_down(Key::Exe) {
+                    while eadk::input::KeyboardState::scan().key_down(Key::Ok)
+                        || eadk::input::KeyboardState::scan().key_down(Key::Exe)
+                    {
                         eadk::timing::msleep(10);
                     }
                 }
             } else if active_row == 4 {
                 if keys.key_down(Key::Ok) || keys.key_down(Key::Exe) {
                     draw_help_screen();
-                    // After returning, redraw options panel
                     draw_settings_layout();
                     draw_settings_panel(active_row, mode, speed, auto_level);
                 }
@@ -568,26 +663,31 @@ pub fn show_menu() -> (usize, i32, bool) {
                     menu_page = 0;
                     eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
                     draw_logo();
-                    draw_main_menu_extras();
-                    while eadk::input::KeyboardState::scan().key_down(Key::Ok) || eadk::input::KeyboardState::scan().key_down(Key::Exe) {
+                    has_save = storage_lib::storage_extapp_file_exists(SAVE_FILENAME);
+                    draw_main_menu_buttons(has_save, main_selected);
+                    while eadk::input::KeyboardState::scan().key_down(Key::Ok)
+                        || eadk::input::KeyboardState::scan().key_down(Key::Exe)
+                    {
                         eadk::timing::msleep(10);
                     }
                 }
             }
-            
+
             if keys.key_down(Key::Back) || keys.key_down(Key::Zero) {
                 save_settings(mode, speed, auto_level);
                 menu_page = 0;
                 eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
                 draw_logo();
-                draw_main_menu_extras();
-                while eadk::input::KeyboardState::scan().key_down(Key::Back) || eadk::input::KeyboardState::scan().key_down(Key::Zero) {
+                has_save = storage_lib::storage_extapp_file_exists(SAVE_FILENAME);
+                draw_main_menu_buttons(has_save, main_selected);
+                while eadk::input::KeyboardState::scan().key_down(Key::Back)
+                    || eadk::input::KeyboardState::scan().key_down(Key::Zero)
+                {
                     eadk::timing::msleep(10);
                 }
             }
         }
+
         eadk::timing::msleep(16);
     }
-    
-    (mode, speed, auto_level)
 }

@@ -3,26 +3,17 @@ use core::ffi::CStr;
 #[cfg(target_os = "none")]
 use alloc::{ffi, string::String, vec::Vec};
 
+// PHYSICAL NUMWORKS TARGET IMPLEMENTATION
 #[cfg(target_os = "none")]
 pub fn storage_file_write(filename: &str, content: &[u8]) -> bool {
     let c_string = ffi::CString::new(filename).unwrap();
     unsafe { extapp_fileWrite(c_string.as_ptr(), content.as_ptr(), content.len()) }
 }
 
-#[cfg(not(target_os = "none"))]
-pub fn storage_file_write(filename: &str, content: &[u8]) -> bool {
-    true
-}
-
 #[cfg(target_os = "none")]
 pub fn storage_extapp_file_exists(filename: &str) -> bool {
     let c_string = ffi::CString::new(filename).unwrap();
     unsafe { extapp_fileExists(c_string.as_ptr()) }
-}
-
-#[cfg(not(target_os = "none"))]
-pub fn storage_extapp_file_exists(filename: &str) -> bool {
-    false
 }
 
 #[cfg(target_os = "none")]
@@ -38,11 +29,6 @@ pub fn storage_extapp_file_read(filename: &str) -> Option<Vec<u8>> {
     Some(unsafe { core::slice::from_raw_parts(array_pointer, lenght).to_vec() })
 }
 
-#[cfg(not(target_os = "none"))]
-pub fn storage_extapp_file_read(filename: &str) -> Option<Vec<u8>> {
-    None
-}
-
 #[cfg(target_os = "none")]
 pub fn storage_extapp_file_read_header(filename: &str, header_len: usize) -> Option<Vec<u8>> {
     let c_string = ffi::CString::new(filename).unwrap();
@@ -56,20 +42,10 @@ pub fn storage_extapp_file_read_header(filename: &str, header_len: usize) -> Opt
     Some(unsafe { core::slice::from_raw_parts(array_pointer, header_len).to_vec() })
 }
 
-#[cfg(not(target_os = "none"))]
-pub fn storage_extapp_file_read_header(filename: &str, header_len: usize) -> Option<Vec<u8>> {
-    None
-}
-
 #[cfg(target_os = "none")]
 pub fn storage_extapp_file_erase(filename: &str) -> bool {
     let c_string = ffi::CString::new(filename).unwrap();
     unsafe { extapp_fileErase(c_string.as_ptr()) }
-}
-
-#[cfg(not(target_os = "none"))]
-pub fn storage_extapp_file_erase(filename: &str) -> bool {
-    true
 }
 
 #[cfg(target_os = "none")]
@@ -97,11 +73,66 @@ pub fn storage_extapp_file_list_with_extension(max_records: usize, extension: &s
     }
 }
 
+// HOST SIMULATOR TARGET IMPLEMENTATION (using real files)
 #[cfg(not(target_os = "none"))]
-pub fn storage_extapp_file_list_with_extension(max_records: usize, extension: &str) -> Vec<String> {
-    Vec::new()
+pub fn storage_file_write(filename: &str, content: &[u8]) -> bool {
+    use std::fs::File;
+    use std::io::Write;
+    if let Ok(mut file) = File::create(filename) {
+        file.write_all(content).is_ok()
+    } else {
+        false
+    }
 }
 
+#[cfg(not(target_os = "none"))]
+pub fn storage_extapp_file_exists(filename: &str) -> bool {
+    std::path::Path::new(filename).exists()
+}
+
+#[cfg(not(target_os = "none"))]
+pub fn storage_extapp_file_read(filename: &str) -> Option<std::vec::Vec<u8>> {
+    use std::fs::File;
+    use std::io::Read;
+    if let Ok(mut file) = File::open(filename) {
+        let mut buffer = std::vec::Vec::new();
+        if file.read_to_end(&mut buffer).is_ok() {
+            Some(buffer)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "none"))]
+pub fn storage_extapp_file_read_header(filename: &str, header_len: usize) -> Option<std::vec::Vec<u8>> {
+    use std::fs::File;
+    use std::io::Read;
+    if let Ok(mut file) = File::open(filename) {
+        let mut buffer = std::vec::Vec::new();
+        if file.take(header_len as u64).read_to_end(&mut buffer).is_ok() {
+            Some(buffer)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "none"))]
+pub fn storage_extapp_file_erase(filename: &str) -> bool {
+    std::fs::remove_file(filename).is_ok()
+}
+
+#[cfg(not(target_os = "none"))]
+pub fn storage_extapp_file_list_with_extension(_max_records: usize, _extension: &str) -> std::vec::Vec<std::string::String> {
+    std::vec::Vec::new()
+}
+
+// BARE-METAL C-INTERFACE BINDINGS
 #[cfg(target_os = "none")]
 unsafe extern "C" {
     fn extapp_fileWrite(filename: *const u8, content: *const u8, len: usize) -> bool;
@@ -113,5 +144,4 @@ unsafe extern "C" {
         maxrecord: isize,
         extension: *const u8,
     ) -> isize;
-
 }
