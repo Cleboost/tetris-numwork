@@ -904,18 +904,6 @@ fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: b
 fn draw_main_menu_extras() {
     eadk::display::draw_string("Press [EXE] to start", Point { x: 60, y: 170 }, false, COLOR_WHITE, COLOR_BLACK);
     eadk::display::draw_string("[0] Options", Point { x: 105, y: 190 }, false, COLOR_WHITE, COLOR_BLACK);
-    
-    // Premium Help capsule button in the top-right corner
-    let btn_border = Rect { x: 215, y: 10, width: 95, height: 22 };
-    let btn_bg = Rect { x: 216, y: 11, width: 93, height: 20 };
-    let border_color = Color::from_888(60, 60, 80);
-    let bg_color = Color::from_888(25, 25, 35);
-    let accent_color = Color::from_888(0, 180, 255);
-    
-    eadk::display::push_rect_uniform(btn_border, border_color);
-    eadk::display::push_rect_uniform(btn_bg, bg_color);
-    eadk::display::draw_string("[Toolbox]", Point { x: 221, y: 14 }, false, COLOR_WHITE, bg_color);
-    eadk::display::draw_string("?", Point { x: 295, y: 14 }, false, accent_color, bg_color);
 }
 
 // Menu screen with options
