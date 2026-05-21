@@ -257,8 +257,10 @@ fn lock_tetra_in_grid(xt: i32, yt: i32, t: usize, r: usize, grid: &mut [[Color; 
             if col >= 0 && col < 12 && row >= 0 && row < 23 {
                 grid[col as usize][row as usize] = color;
             }
-            let draw_y = if xt >= 100 && xt < 220 { y_curr + 10 } else { y_curr };
-            draw_bevel_square(xl, draw_y, color);
+            let draw_y = y_curr;
+            if draw_y >= 0 {
+                draw_bevel_square(xl, draw_y, color);
+            }
             xl += 10;
         } else if cmd == 2 {
             y_curr += 10;
@@ -277,8 +279,10 @@ fn draw_tetra_on_screen(xt: i32, yt: i32, t: usize, r: usize) {
         if cmd == 0 {
             xl += 10;
         } else if cmd == 1 || cmd == 3 {
-            let draw_y = if xt >= 100 && xt < 220 { y_curr + 10 } else { y_curr };
-            draw_bevel_square(xl, draw_y, color);
+            let draw_y = y_curr;
+            if draw_y >= 0 {
+                draw_bevel_square(xl, draw_y, color);
+            }
             xl += 10;
         } else if cmd == 2 {
             y_curr += 10;
@@ -296,8 +300,10 @@ fn refresh_tetra(t: usize, px: i32, py: i32, prot: usize) {
         if cmd == 0 {
             xl += 10;
         } else if cmd == 1 || cmd == 3 {
-            let draw_y = if px >= 100 && px < 220 { y_curr + 10 } else { y_curr };
-            eadk::display::push_rect_uniform(Rect { x: xl as u16, y: draw_y as u16, width: 10, height: 10 }, COLOR_WHITE);
+            let draw_y = y_curr;
+            if draw_y >= 0 {
+                eadk::display::push_rect_uniform(Rect { x: xl as u16, y: draw_y as u16, width: 10, height: 10 }, COLOR_WHITE);
+            }
             xl += 10;
         } else if cmd == 2 {
             y_curr += 10;
@@ -329,8 +335,10 @@ fn draw_outline_on_screen(xt: i32, yt: i32, t: usize, r: usize) {
         if cmd == 0 {
             xl += 10;
         } else if cmd == 1 || cmd == 3 {
-            let draw_y = if xt >= 100 && xt < 220 { y_curr + 10 } else { y_curr };
-            draw_bevel_square(xl, draw_y, ghost_color);
+            let draw_y = y_curr;
+            if draw_y >= 0 {
+                draw_bevel_square(xl, draw_y, ghost_color);
+            }
             xl += 10;
         } else if cmd == 2 {
             y_curr += 10;
@@ -344,7 +352,7 @@ fn get_lowest(x: i32, y: i32, t: usize, r: usize, grid: &[[Color; 23]; 12]) -> i
     let cur = TETRAMINOS[t].states[r];
     let mut ys = y;
     loop {
-        if ys >= 230 {
+        if ys >= 220 {
             return ys - 10;
         }
         let mut py = ys + 5;
@@ -389,15 +397,15 @@ fn init_grid(grid: &mut [[Color; 23]; 12]) {
 }
 
 fn draw_grid_on_screen(_grid: &[[Color; 23]; 12]) {
-    eadk::display::push_rect_uniform(Rect { x: 110, y: 10, width: 100, height: 230 }, COLOR_WHITE);
+    eadk::display::push_rect_uniform(Rect { x: 110, y: 0, width: 100, height: 220 }, COLOR_WHITE);
     for row in 0..23 {
-        let y = (row * 10) as i32 + 10;
+        let y = (row * 10) as i32;
         draw_bevel_square(100, y, COLOR_GREY);
         draw_bevel_square(210, y, COLOR_GREY);
     }
     for col in 1..11 {
         let x = (100 + col * 10) as i32;
-        draw_bevel_square(x, 230, COLOR_GREY);
+        draw_bevel_square(x, 220, COLOR_GREY);
     }
 }
 
@@ -1127,7 +1135,7 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     draw_grid_on_screen(&grid);
     
     // Draw panels and previews border
-    eadk::display::push_rect_uniform(Rect { x: 110, y: 29, width: 100, height: 1 }, Color::from_888(255, 0, 0));
+    eadk::display::push_rect_uniform(Rect { x: 110, y: 19, width: 100, height: 1 }, Color::from_888(255, 0, 0));
     
     for ys in (40..190).step_by(10) {
         for xs in (240..300).step_by(10) {
@@ -1181,7 +1189,7 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
         };
         eadk::display::draw_string(
             tm_str,
-            Point { x: 155, y: 120 },
+            Point { x: 155, y: 110 },
             false,
             COLOR_BLACK,
             COLOR_WHITE,
@@ -1190,7 +1198,7 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     }
     eadk::display::draw_string(
         " ",
-        Point { x: 155, y: 120 },
+        Point { x: 155, y: 110 },
         false,
         COLOR_BLACK,
         COLOR_WHITE,
@@ -1368,8 +1376,8 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
             while eadk::input::KeyboardState::scan().key_down(Key::Ok) {
                 eadk::timing::msleep(10);
             }
-            eadk::display::draw_string("Victory", Point { x: 125, y: 70 }, false, COLOR_BLACK, COLOR_WHITE);
-            eadk::display::draw_string("[OK] Back to menu", Point { x: 75, y: 90 }, false, COLOR_BLACK, COLOR_WHITE);
+            eadk::display::draw_string("Victory", Point { x: 125, y: 60 }, false, COLOR_BLACK, COLOR_WHITE);
+            eadk::display::draw_string("[OK] Back to menu", Point { x: 75, y: 80 }, false, COLOR_BLACK, COLOR_WHITE);
             loop {
                 if eadk::input::KeyboardState::scan().key_down(Key::Ok) {
                     while eadk::input::KeyboardState::scan().key_down(Key::Ok) {
@@ -1386,7 +1394,7 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
             refresh_tetra(t, px, py, prot);
             refresh_tetra(t, px, plowest, prot);
             
-            eadk::display::push_rect_uniform(Rect { x: 110, y: 29, width: 100, height: 1 }, Color::from_888(255, 0, 0));
+            eadk::display::push_rect_uniform(Rect { x: 110, y: 19, width: 100, height: 1 }, Color::from_888(255, 0, 0));
             
             let mut x_curr = x;
             let mut y_curr = y;
@@ -1613,44 +1621,44 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
                                         for xs in 0..10 {
                                             grid[1 + xs][(1 + ys) as usize] = COLOR_WHITE;
                                         }
-                                        eadk::display::push_rect_uniform(Rect { x: 110, y: (20 + ys * 10) as u16, width: 100, height: 10 }, COLOR_WHITE);
+                                        eadk::display::push_rect_uniform(Rect { x: 110, y: (10 + ys * 10) as u16, width: 100, height: 10 }, COLOR_WHITE);
                                     }
                                     
                                     if line != 0 {
-                                        let mut temp_y = 10 + ys * 10;
-                                        let mut temp_line = [COLOR_WHITE; 10];
-                                        for xs in 0..10 {
-                                            temp_line[xs] = grid[1 + xs][(temp_y / 10) as usize];
-                                        }
-                                        
-                                        for xs in 0..10 {
-                                            grid[1 + xs][(temp_y / 10) as usize] = COLOR_WHITE;
-                                        }
-                                        
-                                        let mut a = 0;
-                                        while a < 10 {
-                                            a = 0;
-                                            let next_row = (temp_y + 10) / 10;
-                                            for xs in 0..10 {
-                                                if grid[1 + xs][next_row as usize].rgb565 != COLOR_WHITE.rgb565 {
-                                                    a += 1;
-                                                }
-                                            }
-                                            if a == 0 {
-                                                eadk::display::push_rect_uniform(Rect { x: 110, y: (temp_y + 10) as u16, width: 100, height: 10 }, COLOR_WHITE);
-                                                temp_y += 10;
-                                            } else {
-                                                let dest_row = temp_y / 10;
-                                                for xs in 0..10 {
-                                                    grid[1 + xs][dest_row as usize] = temp_line[xs];
-                                                    if temp_line[xs].rgb565 != COLOR_WHITE.rgb565 {
-                                                        draw_bevel_square(110 + xs as i32 * 10, temp_y + 10, temp_line[xs]);
-                                                    }
-                                                }
-                                                a = 10;
-                                            }
-                                        }
-                                    }
+                                         let mut temp_y = 10 + ys * 10;
+                                         let mut temp_line = [COLOR_WHITE; 10];
+                                         for xs in 0..10 {
+                                             temp_line[xs] = grid[1 + xs][(temp_y / 10) as usize];
+                                         }
+                                         
+                                         for xs in 0..10 {
+                                             grid[1 + xs][(temp_y / 10) as usize] = COLOR_WHITE;
+                                         }
+                                         
+                                         let mut a = 0;
+                                         while a < 10 {
+                                             a = 0;
+                                             let next_row = (temp_y + 10) / 10;
+                                             for xs in 0..10 {
+                                                 if grid[1 + xs][next_row as usize].rgb565 != COLOR_WHITE.rgb565 {
+                                                     a += 1;
+                                                 }
+                                             }
+                                             if a == 0 {
+                                                 eadk::display::push_rect_uniform(Rect { x: 110, y: temp_y as u16, width: 100, height: 10 }, COLOR_WHITE);
+                                                 temp_y += 10;
+                                             } else {
+                                                 let dest_row = temp_y / 10;
+                                                 for xs in 0..10 {
+                                                     grid[1 + xs][dest_row as usize] = temp_line[xs];
+                                                     if temp_line[xs].rgb565 != COLOR_WHITE.rgb565 {
+                                                         draw_bevel_square(110 + xs as i32 * 10, temp_y, temp_line[xs]);
+                                                     }
+                                                 }
+                                                 a = 10;
+                                             }
+                                         }
+                                     }
                                 }
                                 
                                 for xd in (112..212).step_by(10) {
@@ -1690,8 +1698,8 @@ fn run_game(mode: usize, speed: i32, auto_level: bool) -> GameOutcome {
     }
     
     // Game Over
-    eadk::display::draw_string("GAME OVER", Point { x: 115, y: 70 }, false, COLOR_BLACK, COLOR_WHITE);
-    eadk::display::draw_string("[OK] Back to menu", Point { x: 75, y: 90 }, false, COLOR_BLACK, COLOR_WHITE);
+    eadk::display::draw_string("GAME OVER", Point { x: 115, y: 60 }, false, COLOR_BLACK, COLOR_WHITE);
+    eadk::display::draw_string("[OK] Back to menu", Point { x: 75, y: 80 }, false, COLOR_BLACK, COLOR_WHITE);
     loop {
         if eadk::input::KeyboardState::scan().key_down(Key::Ok) {
             while eadk::input::KeyboardState::scan().key_down(Key::Ok) {
