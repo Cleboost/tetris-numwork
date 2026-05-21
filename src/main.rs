@@ -619,17 +619,11 @@ fn draw_help_screen() {
     }
 }
 
-fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: bool) {
-    let modetext = ["Marathon", "Sprint", "Ultra"];
-    
-    // Premium Color Constants
+fn draw_settings_layout() {
     let color_bg_dark = Color::from_888(15, 15, 20);
     let color_panel_bg = Color::from_888(30, 30, 40);
     let color_border = Color::from_888(60, 60, 80);
     let color_accent = Color::from_888(0, 180, 255);      // Cyan neon
-    let color_accent_muted = Color::from_888(0, 70, 110);
-    let color_light_grey = Color::from_888(180, 180, 180);
-    let color_dark_grey = Color::from_888(60, 60, 60);
 
     // 1. Draw outer dark background
     eadk::display::push_rect_uniform(SCREEN_RECT, color_bg_dark);
@@ -658,6 +652,26 @@ fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: b
         COLOR_WHITE,
         Color::from_888(22, 22, 30),
     );
+
+    // Bottom Help Area Divider
+    eadk::display::push_rect_uniform(Rect { x: 12, y: 205, width: 296, height: 1 }, color_border);
+}
+
+fn draw_settings_panel(active_row: usize, mode: usize, speed: i32, auto_level: bool) {
+    let modetext = ["Marathon", "Sprint", "Ultra"];
+    
+    // Premium Color Constants
+    let color_panel_bg = Color::from_888(30, 30, 40);
+    let color_border = Color::from_888(60, 60, 80);
+    let color_accent = Color::from_888(0, 180, 255);      // Cyan neon
+    let color_accent_muted = Color::from_888(0, 70, 110);
+    let color_light_grey = Color::from_888(180, 180, 180);
+    let color_dark_grey = Color::from_888(60, 60, 60);
+
+    // Clear active content areas inside card to make transitions 100% flicker-free
+    eadk::display::push_rect_uniform(Rect { x: 12, y: 46, width: 296, height: 158 }, color_panel_bg);
+    eadk::display::push_rect_uniform(Rect { x: 260, y: 13, width: 45, height: 30 }, Color::from_888(22, 22, 30));
+    eadk::display::push_rect_uniform(Rect { x: 12, y: 206, width: 296, height: 22 }, color_panel_bg);
 
     // Draw the "?" button in the top-right of the header
     let is_help_active = active_row == 4;
@@ -906,6 +920,7 @@ fn show_menu() -> (usize, i32, bool) {
                 menu_page = 1;
                 active_row = 0;
                 
+                draw_settings_layout();
                 // Initial draw of the settings panel
                 draw_settings_panel(active_row, mode, speed, auto_level);
                 
@@ -980,6 +995,7 @@ fn show_menu() -> (usize, i32, bool) {
                 if keys.key_down(Key::Ok) || keys.key_down(Key::Exe) {
                     draw_help_screen();
                     // After returning, redraw options panel
+                    draw_settings_layout();
                     draw_settings_panel(active_row, mode, speed, auto_level);
                 }
             } else if active_row == 3 {
