@@ -609,6 +609,10 @@ fn run_game(mode: usize, speed: i32) -> GameOutcome {
     
     let mut grid = [[COLOR_WHITE; 23]; 12];
     init_grid(&mut grid);
+
+    // Clear the entire screen to black to wipe out menu elements and the logo
+    eadk::display::push_rect_uniform(SCREEN_RECT, COLOR_BLACK);
+
     draw_grid_on_screen(&grid);
     
     // Draw panels and previews border
