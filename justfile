@@ -26,8 +26,8 @@ sim jobs="1":
     -git clone https://github.com/numworks/epsilon.git epsilon_simulator -b version-20 # Broken with version 21. Nice!
     cargo build --release --target={{current_target}} --lib
     if [ ! -f "target/simulator_patched" ]; then \
-        cd epsilon_simulator && make PLATFORM=simulator -j {{jobs}}; \
-        cd ..; \
+        cd epsilon_simulator && make PLATFORM=simulator -j {{jobs}} && \
+        cd .. && \
         echo "yes it is" >> target/simulator_patched; \
     fi
     just run_nwb
